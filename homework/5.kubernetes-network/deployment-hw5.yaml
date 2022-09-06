@@ -1,0 +1,91 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-redmine
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 0 
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: my-redmine
+  template:
+    metadata:
+      labels:
+        app: my-redmine
+    spec:
+      containers:
+      - image: redmine:4.1.1
+        name: redmine
+        env:
+        - name: REDMINE_DB_POSTGRES
+          value: database
+        - name: REDMINE_DB_USERNAME
+          value: testuser  
+        - name: REDMINE_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: my-secret
+              key: PASS  
+        - name: REDMINE_DB_DATABASE
+          value: "testdatabase"
+        - name: REDMINE_SECRET_KEY_BASE
+          valueFrom:
+            secretKeyRef:
+              name: my-supersecretkey
+              key: SUPERSECRET    
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 100m
+            memory: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: database
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: my-database
+  type: ClusterIP            
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redmine-service
+spec:
+  ports:
+  - port: 3000
+    targetPort: 3000
+  selector:
+    app: my-redmine
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - http:
+      paths:
+      - path: "/"
+        pathType: Prefix
+        backend:
+          service:
+            name: redmine-service
+            port:
+              number: 8080            
